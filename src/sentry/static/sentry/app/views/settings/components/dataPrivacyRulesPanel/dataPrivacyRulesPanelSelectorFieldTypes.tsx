@@ -1,6 +1,24 @@
 import {t} from 'app/locale';
 
-const valueSelectors: Suggestions = [
+const binaryOperatorSuggestions: Suggestions = [
+  {
+    type: 'binary',
+    value: '&&',
+  },
+  {
+    type: 'binary',
+    value: '||',
+  },
+];
+
+const unaryOperatorSuggestions: Suggestions = [
+  {
+    type: 'unary',
+    value: '!',
+  },
+];
+
+const valueSuggestions: Suggestions = [
   {
     type: 'value',
     value: '$string',
@@ -78,24 +96,15 @@ const valueSelectors: Suggestions = [
   },
 ];
 
-const booleanSelectors: Suggestions = [
-  {
-    type: 'boolean',
-    value: '&&',
-  },
-  {
-    type: 'boolean',
-    value: '||',
-  },
-  {
-    type: 'boolean',
-    value: '!',
-  },
+const initialSelectors: Suggestions = [...valueSuggestions, ...unaryOperatorSuggestions];
+
+const allSelectors: Suggestions = [
+  ...valueSuggestions,
+  ...unaryOperatorSuggestions,
+  ...binaryOperatorSuggestions,
 ];
 
-const selectors: Suggestions = [...valueSelectors, ...booleanSelectors];
-
-type SuggestionType = 'value' | 'boolean';
+type SuggestionType = 'value' | 'unary' | 'binary' | 'string';
 
 export type Suggestions = Array<Suggestion>;
 
@@ -105,4 +114,4 @@ export type Suggestion = {
   description?: string;
 };
 
-export {selectors, valueSelectors, booleanSelectors};
+export {initialSelectors, allSelectors, valueSuggestions, binaryOperatorSuggestions};

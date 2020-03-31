@@ -9,16 +9,17 @@ import Tooltip from 'app/components/tooltip';
 import {defined} from 'app/utils';
 
 import {
-  selectors,
-  valueSelectors,
-  booleanSelectors,
+  initialSelectors,
+  allSelectors,
+  valueSuggestions,
+  binaryOperatorSuggestions,
   Suggestion,
   Suggestions,
 } from './dataPrivacyRulesPanelSelectorFieldTypes';
 
 type State = {
   suggestions: Suggestions;
-  fieldValues: Array<Suggestion | string>;
+  fieldValues: Array<Suggestion | Array<Suggestion>>;
   activeSuggestion: number;
   showSuggestions: boolean;
 };
@@ -55,7 +56,7 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
   suggestionList = React.createRef<HTMLUListElement>();
 
   getNewSuggestions = (
-    fieldValues: Array<Suggestion | string>
+    fieldValues: Array<Suggestion>
   ): {
     filteredSuggestions: Array<Suggestion>;
     showSuggestions?: boolean;
@@ -63,50 +64,47 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     const lastFieldValue = fieldValues[fieldValues.length - 1];
     const penultimateFieldValue = fieldValues[fieldValues.length - 2];
 
-    if (!defined(lastFieldValue)) {
+    console.log('lastFieldValue', lastFieldValue);
+    console.log('penultimateFieldValue', penultimateFieldValue);
+
+    if (lastFieldValue?.type === 'unary') {
       return {
-        filteredSuggestions: [],
+        filteredSuggestions: valueSuggestions,
       };
     }
 
-    if (
-      typeof penultimateFieldValue === 'object' &&
-      penultimateFieldValue.type === 'boolean'
-    ) {
+    if (penultimateFieldValue?.type === 'value' && lastFieldValue?.type !== 'binary') {
       return {
-        filteredSuggestions: valueSelectors,
+        filteredSuggestions: binaryOperatorSuggestions,
       };
     }
 
-    if (fieldValues.length > 1 && typeof lastFieldValue === 'string' && !lastFieldValue) {
-      return {
-        filteredSuggestions: booleanSelectors,
-      };
-    }
-
-    const value =
-      typeof lastFieldValue === 'string' ? lastFieldValue : lastFieldValue.value;
-
-    const filteredSuggestions = selectors.filter(
-      s => s.value.indexOf(value.toLowerCase()) > -1
+    const filteredSuggestions = initialSelectors.filter(
+      s => s.value.indexOf(lastFieldValue.value.toLowerCase()) > -1
     );
 
     return {
       filteredSuggestions,
       showSuggestions: !(
-        filteredSuggestions.length === 1 && filteredSuggestions[0].value === value
+        filteredSuggestions.length === 1 &&
+        filteredSuggestions[0].value === lastFieldValue.value
       ),
     };
   };
 
   loadFieldValues = (newValue: string) => {
-    const splittedValue = newValue.split(' ');
-    const fieldValues: Array<Suggestion | string> = [];
+    const splittedValue = newValue.replace('!', '! ').split(' ');
+    const fieldValues: Array<Suggestion> = [];
 
-    for (const index in splittedValue) {
-      const value = splittedValue[index];
-      const selector = selectors.find(s => s.value === value);
-      fieldValues.push(selector ? selector : value);
+    for (const splittedValueIndex in splittedValue) {
+      const value = splittedValue[splittedValueIndex];
+      const selector = allSelectors.find(s => s.value === value);
+      if (selector) {
+        fieldValues.push(selector);
+        continue;
+      }
+
+      fieldValues.push({type: 'string', value});
     }
 
     const {showSuggestions = true, filteredSuggestions} = this.getNewSuggestions(
@@ -147,11 +145,11 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
 
     for (const index in fieldValues) {
       const fieldValue = fieldValues[index];
-      if (typeof fieldValue !== 'string') {
-        newValue.push(fieldValue.value);
+      if (Array.isArray(fieldValue)) {
+        newValue.push(`${fieldValue[0].value}${fieldValue[1].value}`);
         continue;
       }
-      newValue.push(fieldValue);
+      newValue.push(fieldValue.value);
     }
 
     onChange(newValue.join(' '));
@@ -161,12 +159,21 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     let fieldValues = [...this.state.fieldValues];
     const lastFieldValue = fieldValues[fieldValues.length - 1];
 
-    if (defined(lastFieldValue)) {
-      fieldValues[fieldValues.length - 1] = suggestion;
+    if (Array.isArray(lastFieldValue)) {
+      return;
     }
 
     if (!defined(lastFieldValue)) {
       fieldValues = [suggestion];
+    }
+
+    if (lastFieldValue?.type === 'unary') {
+      //@ts-ignore
+      fieldValues[fieldValues.length - 1] = [lastFieldValue, suggestion];
+    }
+
+    if (lastFieldValue?.type === 'string') {
+      fieldValues[fieldValues.length - 1] = suggestion;
     }
 
     this.setState(
@@ -220,7 +227,7 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
 
     if (event.keyCode === 32) {
       this.setState({
-        fieldValues: [...fieldValues, ' '],
+        fieldValues: [...fieldValues, {value: ' ', type: 'string'}],
       });
       return;
     }
