@@ -5,7 +5,6 @@ import space from 'app/styles/space';
 import {t} from 'app/locale';
 import TextField from 'app/components/forms/textField';
 import TextOverflow from 'app/components/textOverflow';
-import Tooltip from 'app/components/tooltip';
 import {defined} from 'app/utils';
 
 import {
@@ -357,27 +356,19 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
         {showSuggestions && suggestions.length > 0 && (
           <SuggestionsWrapper ref={this.suggestionList}>
             {suggestions.map((suggestion, index) => (
-              <SuggestionItemWrapper
+              <SuggestionItem
                 key={suggestion.value}
                 onClick={this.handleClickSuggestionItem(suggestion)}
                 active={index === activeSuggestion}
                 tabIndex={-1}
               >
-                <Tooltip
-                  title={`${suggestion.value} ${suggestion?.description &&
-                    `(${suggestion.description})`}`}
-                  position="top"
-                >
-                  <SuggestionItem>
-                    <TextOverflow>{suggestion.value}</TextOverflow>
-                    {suggestion?.description && (
-                      <SuggestionDescription>
-                        (<TextOverflow>{suggestion.description}</TextOverflow>)
-                      </SuggestionDescription>
-                    )}
-                  </SuggestionItem>
-                </Tooltip>
-              </SuggestionItemWrapper>
+                <TextOverflow>{suggestion.value}</TextOverflow>
+                {suggestion?.description && (
+                  <SuggestionDescription>
+                    (<TextOverflow>{suggestion.description}</TextOverflow>)
+                  </SuggestionDescription>
+                )}
+              </SuggestionItem>
             ))}
           </SuggestionsWrapper>
         )}
@@ -424,7 +415,10 @@ const SuggestionsWrapper = styled('ul')`
   overflow-y: auto;
 `;
 
-const SuggestionItemWrapper = styled('li')<{active: boolean}>`
+const SuggestionItem = styled('li')<{active: boolean}>`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-gap: ${space(1)};
   border-bottom: 1px solid ${p => p.theme.borderLight};
   padding: ${space(1)} ${space(2)};
   font-size: ${p => p.theme.fontSizeMedium};
@@ -433,12 +427,6 @@ const SuggestionItemWrapper = styled('li')<{active: boolean}>`
   :hover {
     background: ${p => (p.active ? p.theme.offWhiteLight : p.theme.offWhite)};
   }
-`;
-
-const SuggestionItem = styled('div')`
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-gap: ${space(1)};
 `;
 
 const SuggestionDescription = styled('div')`
