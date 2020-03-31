@@ -1,10 +1,18 @@
 import {t} from 'app/locale';
 import {NavigationSection} from 'app/views/settings/types';
-import {Project} from 'app/types';
+import {Organization, Project} from 'app/types';
+
+type ConfigParams = {
+  organization: Organization;
+  project: Project;
+};
 
 const pathPrefix = '/settings/:orgId/projects/:projectId';
 
-function getConfiguration(project: Project): NavigationSection[] {
+export default function getConfiguration({
+  project,
+  organization,
+}: ConfigParams): NavigationSection[] {
   const plugins = ((project && project.plugins) || []).filter(plugin => plugin.enabled);
   return [
     {
@@ -15,16 +23,6 @@ function getConfiguration(project: Project): NavigationSection[] {
           index: true,
           title: t('General Settings'),
           description: t('Configure general settings for a project'),
-        },
-        {
-          path: `${pathPrefix}/data-privacy/`,
-          title: t('Data Privacy'),
-          description: t('Configure Datascrubbers for a project'),
-          id: 'data-privacy',
-          show: ({features}) => {
-            return !!features?.has('datascrubbers-v2');
-          },
-          badge: () => 'new',
         },
         {
           path: `${pathPrefix}/teams/`,
@@ -50,6 +48,13 @@ function getConfiguration(project: Project): NavigationSection[] {
           path: `${pathPrefix}/ownership/`,
           title: t('Issue Owners'),
           description: t('Manage issue ownership rules for a project'),
+        },
+        {
+          path: `${pathPrefix}/data-privacy/`,
+          title: t('Data Privacy'),
+          description: t('Configure Datascrubbers for a project'),
+          show: () => organization.features?.includes('datascrubbers-v2'),
+          badge: () => 'new',
         },
         {
           path: `${pathPrefix}/data-forwarding/`,
@@ -130,5 +135,3 @@ function getConfiguration(project: Project): NavigationSection[] {
     },
   ];
 }
-
-export default getConfiguration;

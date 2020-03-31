@@ -12,6 +12,7 @@ import {
   initialSelectors,
   allSelectors,
   valueSuggestions,
+  unaryOperatorSuggestions,
   binaryOperatorSuggestions,
   Suggestion,
   Suggestions,
@@ -45,7 +46,7 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
   }
 
   componentDidMount() {
-    this.loadFieldValues(this.props.value);
+    this.loadFieldValues(this.props.value, true);
   }
 
   componentWillUnmount() {
@@ -56,7 +57,7 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
   suggestionList = React.createRef<HTMLUListElement>();
 
   getNewSuggestions = (
-    fieldValues: Array<Suggestion>
+    fieldValues: Array<Suggestion | Array<Suggestion>>
   ): {
     filteredSuggestions: Array<Suggestion>;
     showSuggestions?: boolean;
@@ -64,22 +65,88 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     const lastFieldValue = fieldValues[fieldValues.length - 1];
     const penultimateFieldValue = fieldValues[fieldValues.length - 2];
 
-    console.log('lastFieldValue', lastFieldValue);
-    console.log('penultimateFieldValue', penultimateFieldValue);
-
-    if (lastFieldValue?.type === 'unary') {
+    if (
+      !defined(penultimateFieldValue) &&
+      !Array.isArray(lastFieldValue) &&
+      !lastFieldValue.value
+    ) {
       return {
-        filteredSuggestions: valueSuggestions,
+        filteredSuggestions: initialSelectors,
       };
     }
 
-    if (penultimateFieldValue?.type === 'value' && lastFieldValue?.type !== 'binary') {
+    if (
+      (Array.isArray(penultimateFieldValue) ||
+        penultimateFieldValue?.type === 'string') &&
+      (Array.isArray(lastFieldValue) || !lastFieldValue.value)
+    ) {
       return {
         filteredSuggestions: binaryOperatorSuggestions,
       };
     }
 
-    const filteredSuggestions = initialSelectors.filter(
+    if (
+      (Array.isArray(penultimateFieldValue) || penultimateFieldValue?.type === 'value') &&
+      (Array.isArray(lastFieldValue) || !lastFieldValue.value)
+    ) {
+      return {
+        filteredSuggestions: binaryOperatorSuggestions,
+      };
+    }
+
+    if (Array.isArray(lastFieldValue)) {
+      const filteredSuggestions = initialSelectors.filter(
+        s => s.value.indexOf(lastFieldValue[1].value.toLowerCase()) > -1
+      );
+
+      return {
+        filteredSuggestions,
+        showSuggestions: !(
+          filteredSuggestions.length === 1 &&
+          filteredSuggestions[0].value === lastFieldValue[1].value
+        ),
+      };
+    }
+
+    if (!lastFieldValue.value && Array.isArray(penultimateFieldValue)) {
+      return {
+        filteredSuggestions: binaryOperatorSuggestions,
+      };
+    }
+
+    if (
+      lastFieldValue.type === 'string' &&
+      !lastFieldValue.value &&
+      fieldValues.length > 1 &&
+      !Array.isArray(penultimateFieldValue) &&
+      penultimateFieldValue?.type === 'string'
+    ) {
+      const filteredSuggestions = initialSelectors.filter(
+        s => s.value.indexOf(penultimateFieldValue?.value.toLowerCase()) > -1
+      );
+
+      return {
+        filteredSuggestions,
+      };
+    }
+
+    if (lastFieldValue.type === 'unary') {
+      return {
+        filteredSuggestions: valueSuggestions,
+      };
+    }
+
+    if (
+      !Array.isArray(penultimateFieldValue) &&
+      !lastFieldValue.value &&
+      penultimateFieldValue?.type === 'binary'
+    ) {
+      return {
+        filteredSuggestions: initialSelectors,
+      };
+    }
+
+    const filteredSuggestions = allSelectors.filter(
       s => s.value.indexOf(lastFieldValue.value.toLowerCase()) > -1
     );
 
@@ -92,12 +159,27 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     };
   };
 
-  loadFieldValues = (newValue: string) => {
-    const splittedValue = newValue.replace('!', '! ').split(' ');
-    const fieldValues: Array<Suggestion> = [];
+  loadFieldValues = (newValue: string, initialLoading = false) => {
+    const splittedValue = newValue.split(' ');
+    const fieldValues: Array<Suggestion | Array<Suggestion>> = [];
 
     for (const splittedValueIndex in splittedValue) {
       const value = splittedValue[splittedValueIndex];
+
+      if (value.includes('!') && !!value.split('!')[1]) {
+        const valueAfterUnaryOperator = value.split('!')[1];
+        const selector = allSelectors.find(s => s.value === valueAfterUnaryOperator);
+        if (!selector) {
+          fieldValues.push([
+            unaryOperatorSuggestions[0],
+            {type: 'string', value: valueAfterUnaryOperator},
+          ]);
+          continue;
+        }
+        fieldValues.push([unaryOperatorSuggestions[0], selector]);
+        continue;
+      }
+
       const selector = allSelectors.find(s => s.value === value);
       if (selector) {
         fieldValues.push(selector);
@@ -114,7 +196,7 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     this.setState({
       fieldValues,
       suggestions: filteredSuggestions,
-      showSuggestions,
+      showSuggestions: initialLoading ? false : showSuggestions,
       activeSuggestion: 0,
     });
   };
@@ -155,20 +237,20 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     onChange(newValue.join(' '));
   };
 
-  handleClickSuggestionItem = (suggestion: Suggestion) => () => {
-    let fieldValues = [...this.state.fieldValues];
+  getNewFieldValues = (suggestion: Suggestion): Array<Suggestion | Array<Suggestion>> => {
+    const fieldValues = [...this.state.fieldValues];
     const lastFieldValue = fieldValues[fieldValues.length - 1];
 
-    if (Array.isArray(lastFieldValue)) {
-      return;
+    if (!defined(lastFieldValue)) {
+      return [suggestion];
     }
 
-    if (!defined(lastFieldValue)) {
-      fieldValues = [suggestion];
+    if (Array.isArray(lastFieldValue)) {
+      fieldValues[fieldValues.length - 1] = [lastFieldValue[0], suggestion];
+      return fieldValues;
     }
 
     if (lastFieldValue?.type === 'unary') {
-      //@ts-ignore
       fieldValues[fieldValues.length - 1] = [lastFieldValue, suggestion];
     }
 
@@ -176,6 +258,11 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
       fieldValues[fieldValues.length - 1] = suggestion;
     }
 
+    return fieldValues;
+  };
+
+  handleClickSuggestionItem = (suggestion: Suggestion) => () => {
+    const fieldValues = this.getNewFieldValues(suggestion);
     this.setState(
       {
         fieldValues,
@@ -199,6 +286,16 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
 
   handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     const {fieldValues, activeSuggestion, suggestions} = this.state;
+
+    if (event.keyCode === 8) {
+      const lastFieldValue = fieldValues[fieldValues.length - 1];
+      if (Array.isArray(lastFieldValue) && lastFieldValue[1].value.length === 1) {
+        this.setState({
+          fieldValues: [...fieldValues, lastFieldValue[0]],
+        });
+      }
+      return;
+    }
 
     if (event.keyCode === 13) {
       this.handleClickSuggestionItem(suggestions[activeSuggestion])();

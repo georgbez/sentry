@@ -114,4 +114,10 @@ export type Suggestion = {
   description?: string;
 };
 
-export {initialSelectors, allSelectors, valueSuggestions, binaryOperatorSuggestions};
+export {
+  initialSelectors,
+  allSelectors,
+  valueSuggestions,
+  unaryOperatorSuggestions,
+  binaryOperatorSuggestions,
+};
