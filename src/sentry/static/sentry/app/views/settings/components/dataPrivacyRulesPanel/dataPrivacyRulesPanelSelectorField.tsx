@@ -52,34 +52,51 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
   }
 
   selectorField = React.createRef<HTMLDivElement>();
+  suggestionList = React.createRef<HTMLUListElement>();
 
-  getNewSuggestions = (fieldValues: Array<Suggestion | string>) => {
+  getNewSuggestions = (
+    fieldValues: Array<Suggestion | string>
+  ): {
+    filteredSuggestions: Array<Suggestion>;
+    showSuggestions?: boolean;
+  } => {
     const lastFieldValue = fieldValues[fieldValues.length - 1];
     const penultimateFieldValue = fieldValues[fieldValues.length - 2];
 
     if (!defined(lastFieldValue)) {
-      return [];
+      return {
+        filteredSuggestions: [],
+      };
     }
 
     if (
       typeof penultimateFieldValue === 'object' &&
       penultimateFieldValue.type === 'boolean'
     ) {
-      return valueSelectors;
+      return {
+        filteredSuggestions: valueSelectors,
+      };
     }
 
     if (fieldValues.length > 1 && typeof lastFieldValue === 'string' && !lastFieldValue) {
-      return booleanSelectors;
+      return {
+        filteredSuggestions: booleanSelectors,
+      };
     }
 
     const value =
       typeof lastFieldValue === 'string' ? lastFieldValue : lastFieldValue.value;
 
-    const filteredSuggestions = selectors.filter(s =>
-      s.value.includes(value.toLowerCase())
+    const filteredSuggestions = selectors.filter(
+      s => s.value.indexOf(value.toLowerCase()) > -1
     );
 
-    return filteredSuggestions;
+    return {
+      filteredSuggestions,
+      showSuggestions: !(
+        filteredSuggestions.length === 1 && filteredSuggestions[0].value === value
+      ),
+    };
   };
 
   loadFieldValues = (newValue: string) => {
@@ -92,11 +109,14 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
       fieldValues.push(selector ? selector : value);
     }
 
-    const newSuggestions = this.getNewSuggestions(fieldValues);
+    const {showSuggestions = true, filteredSuggestions} = this.getNewSuggestions(
+      fieldValues
+    );
 
     this.setState({
       fieldValues,
-      suggestions: newSuggestions,
+      suggestions: filteredSuggestions,
+      showSuggestions,
       activeSuggestion: 0,
     });
   };
@@ -152,8 +172,8 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     this.setState(
       {
         fieldValues,
-        showSuggestions: false,
         activeSuggestion: 0,
+        showSuggestions: false,
       },
       () => {
         this.handleChangeParentValue();
@@ -161,13 +181,19 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
     );
   };
 
+  scrollToSuggestion = () => {
+    const {activeSuggestion} = this.state;
+    this.suggestionList?.current?.children[activeSuggestion].scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'start',
+    });
+  };
+
   handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     const {fieldValues, activeSuggestion, suggestions} = this.state;
 
-    console.log('event.keyCode', event.keyCode);
-
     if (event.keyCode === 13) {
-      console.log('suggestion', suggestions[activeSuggestion]);
       this.handleClickSuggestionItem(suggestions[activeSuggestion])();
       return;
     }
@@ -176,7 +202,9 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
       if (activeSuggestion === 0) {
         return;
       }
-      this.setState({activeSuggestion: activeSuggestion - 1});
+      this.setState({activeSuggestion: activeSuggestion - 1}, () => {
+        this.scrollToSuggestion();
+      });
       return;
     }
 
@@ -184,7 +212,9 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
       if (activeSuggestion === suggestions.length - 1) {
         return;
       }
-      this.setState({activeSuggestion: activeSuggestion + 1});
+      this.setState({activeSuggestion: activeSuggestion + 1}, () => {
+        this.scrollToSuggestion();
+      });
       return;
     }
 
@@ -221,12 +251,13 @@ class DataPrivacyRulesPanelSelectorField extends React.Component<Props, State> {
           disabled={disabled}
         />
         {showSuggestions && suggestions.length > 0 && (
-          <SuggestionsWrapper>
+          <SuggestionsWrapper ref={this.suggestionList}>
             {suggestions.map((suggestion, index) => (
               <SuggestionItemWrapper
                 key={suggestion.value}
                 onClick={this.handleClickSuggestionItem(suggestion)}
                 active={index === activeSuggestion}
+                tabIndex={-1}
               >
                 <Tooltip
                   title={`${suggestion.value} ${suggestion?.description &&
@@ -296,7 +327,7 @@ const SuggestionItemWrapper = styled('li')<{active: boolean}>`
   cursor: pointer;
   background: ${p => (p.active ? p.theme.offWhiteLight : p.theme.white)};
   :hover {
-    background: ${p => p.theme.offWhite};
+    background: ${p => (p.active ? p.theme.offWhiteLight : p.theme.offWhite)};
   }
 `;
 

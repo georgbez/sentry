@@ -98,6 +98,7 @@ const selectors: Suggestions = [...valueSelectors, ...booleanSelectors];
 type SuggestionType = 'value' | 'boolean';
 
 export type Suggestions = Array<Suggestion>;
+
 export type Suggestion = {
   type: SuggestionType;
   value: string;
