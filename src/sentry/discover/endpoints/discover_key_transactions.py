@@ -8,7 +8,7 @@ from sentry.api.bases.organization import OrganizationPermission
 from sentry.api.exceptions import ResourceDoesNotExist
 from sentry.discover.models import KeyTransaction
 from sentry.discover.endpoints.serializers import KeyTransactionSerializer
-from sentry.snuba.discover import key_transaction_query
+from sentry.snuba.discover import key_transaction_query, key_transaction_timeseries_query
 
 
 class IsKeyTransactionEndpoint(KeyTransactionBase):
@@ -98,3 +98,30 @@ class KeyTransactionEndpoint(KeyTransactionBase):
         model.delete()
 
         return Response(status=204)
+
+
+class KeyTransactionStatsEndpoint(KeyTransactionBase):
+    permission_classes = (OrganizationPermission,)
+
+    def get(self, request, organization):
+        """ Get the Key Transactions for a user """
+        if not self.has_feature(request, organization):
+            return self.response(status=404)
+
+        queryset = KeyTransaction.objects.filter(organization=organization, owner=request.user)
+        if not queryset.exists():
+            raise ResourceDoesNotExist
+
+        def get_event_stats(query_columns, query, params, rollup, reference_event=None):
+            return key_transaction_timeseries_query(
+                selected_columns=query_columns,
+                query=query,
+                params=params,
+                rollup=rollup,
+                referrer="api.organization-event-stats.key-transactions",
+                queryset=queryset,
+            )
+
+        return Response(
+            self.get_event_stats_data(request, organization, get_event_stats), status=200
+        )

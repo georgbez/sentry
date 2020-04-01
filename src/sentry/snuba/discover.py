@@ -656,45 +656,7 @@ def key_transaction_query(selected_columns, user_query, params, orderby, referre
     )
 
 
-def key_transaction_timeseries_query(
-    selected_columns, user_query, params, rollup, referrer, queryset
-):
-    return timeseries_query(
-        selected_columns,
-        user_query,
-        params,
-        rollup,
-        referrer=referrer,
-        conditions=key_transaction_conditions(queryset),
-    )
-
-
-def timeseries_query(
-    selected_columns, query, params, rollup, reference_event=None, referrer=None, conditions=None
-):
-    """
-    High-level API for doing arbitrary user timeseries queries against events.
-
-    This function operates on the public event schema and
-    virtual fields/aggregate functions for selected columns and
-    conditions are supported through this function.
-
-    This function is intended to only get timeseries based
-    results and thus requires the `rollup` parameter.
-
-    Returns a SnubaTSResult object that has been zerofilled in
-    case of gaps.
-
-    selected_columns (Sequence[str]) List of public aliases to fetch.
-    query (str) Filter query string to create conditions from.
-    params (Dict[str, str]) Filtering parameters with start, end, project_id, environment,
-    rollup (int) The bucket width in seconds
-    reference_event (ReferenceEvent) A reference event object. Used to generate additional
-                    conditions based on the provided reference.
-    referrer (str|None) A referrer string to help locate the origin of this query.
-    conditions (Sequence[any]) List of conditions that are passed directly to snuba without
-                    any additional processing.
-    """
+def get_timeseries_snuba_vars(selected_columns, query, params, rollup, reference_event=None):
     # TODO(evanh): These can be removed once we migrate the frontend / saved queries
     # to use the new function values
     selected_columns, _ = transform_deprecated_functions_in_columns(selected_columns)
@@ -727,8 +689,59 @@ def timeseries_query(
     if len(snuba_args["aggregations"]) == 1:
         snuba_args["aggregations"][0][2] = "count"
 
-    if conditions is not None:
-        snuba_args["conditions"].extend(conditions)
+    return snuba_args, snuba_filter
+
+
+def key_transaction_timeseries_query(selected_columns, query, params, rollup, referrer, queryset):
+    snuba_args, snuba_filter = get_timeseries_snuba_vars(selected_columns, query, params, rollup)
+    snuba_args.get("conditions").extend(key_transaction_conditions(queryset))
+
+    result = raw_query(
+        aggregations=snuba_args.get("aggregations"),
+        conditions=snuba_args.get("conditions"),
+        filter_keys=snuba_args.get("filter_keys"),
+        start=snuba_args.get("start"),
+        end=snuba_args.get("end"),
+        rollup=rollup,
+        orderby="time",
+        groupby=["time"],
+        dataset=Dataset.Discover,
+        limit=10000,
+        referrer=referrer,
+    )
+    result = zerofill(result["data"], snuba_args["start"], snuba_args["end"], rollup, "time")
+
+    return SnubaTSResult({"data": result}, snuba_filter.start, snuba_filter.end, rollup)
+
+
+def timeseries_query(selected_columns, query, params, rollup, reference_event=None, referrer=None):
+    """
+    High-level API for doing arbitrary user timeseries queries against events.
+
+    This function operates on the public event schema and
+    virtual fields/aggregate functions for selected columns and
+    conditions are supported through this function.
+
+    This function is intended to only get timeseries based
+    results and thus requires the `rollup` parameter.
+
+    Returns a SnubaTSResult object that has been zerofilled in
+    case of gaps.
+
+    selected_columns (Sequence[str]) List of public aliases to fetch.
+    query (str) Filter query string to create conditions from.
+    params (Dict[str, str]) Filtering parameters with start, end, project_id, environment,
+    rollup (int) The bucket width in seconds
+    reference_event (ReferenceEvent) A reference event object. Used to generate additional
+                    conditions based on the provided reference.
+    referrer (str|None) A referrer string to help locate the origin of this query.
+    conditions (Sequence[any]) List of conditions that are passed directly to snuba without
+                    any additional processing.
+    """
+
+    snuba_args, snuba_filter = get_timeseries_snuba_vars(
+        selected_columns, query, params, rollup, reference_event
+    )
 
     result = raw_query(
         aggregations=snuba_args.get("aggregations"),
